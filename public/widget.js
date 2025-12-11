@@ -2,14 +2,10 @@
   // --- CONFIG ---
   const SERVER_URL = "https://n8n.srv1182142.hstgr.cloud/webhook/Albasha-Chat";
   const PRIMARY = "#A4472E"; // Albasha Red
-  const ICON = "💬";
+  const ICON = "💬"; // Replace later with your vector icon
 
-  // --- SIMPLE CHAT SESSION ID (per browser) ---
+  // --- CHAT ID (per browser) ---
   let CHAT_ID = localStorage.getItem("albasha_chat_id") || null;
-  if (!CHAT_ID) {
-    CHAT_ID = "albasha-" + Date.now() + "-" + Math.random().toString(16).slice(2);
-    localStorage.setItem("albasha_chat_id", CHAT_ID);
-  }
 
   // --- STYLES ---
   const style = document.createElement("style");
@@ -53,7 +49,7 @@
       background: ${PRIMARY};
       padding: 14px;
       color: #fff;
-      font-weight: 600;
+      font-weight: bold;
       text-align: center;
     }
 
@@ -62,6 +58,28 @@
       padding: 12px;
       overflow-y: auto;
       font-size: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .albasha-bubble {
+      padding: 10px 14px;
+      border-radius: 12px;
+      max-width: 80%;
+      white-space: pre-wrap;
+      font-size: 14px;
+    }
+
+    .albasha-bubble.user {
+      background: #eee;
+      align-self: flex-end;
+    }
+
+    .albasha-bubble.ai {
+      background: ${PRIMARY};
+      color: #fff;
+      align-self: flex-start;
     }
 
     #albasha-chat-input {
@@ -83,7 +101,6 @@
       border: none;
       padding: 0 18px;
       cursor: pointer;
-      font-weight: 500;
     }
   `;
   document.head.appendChild(style);
@@ -101,30 +118,22 @@
     <div id="albasha-chat-header">Albasha Assistant</div>
     <div id="albasha-chat-messages"></div>
     <div id="albasha-chat-input">
-      <input type="text" id="albasha-chat-text" placeholder="Type here..." />
+      <input type="text" id="albasha-chat-text" placeholder="Type here...">
       <button id="albasha-send">Send</button>
     </div>
   `;
   document.body.appendChild(chat);
 
+  const messagesEl = document.getElementById("albasha-chat-messages");
   const inputEl = document.getElementById("albasha-chat-text");
+  const sendBtn = document.getElementById("albasha-send");
 
   // --- OPEN/CLOSE ---
   btn.onclick = () => {
     chat.style.display = chat.style.display === "flex" ? "none" : "flex";
   };
 
-  // send on Enter
-  inputEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-
-  document.getElementById("albasha-send").onclick = sendMessage;
-
-  // --- SEND MESSAGE ---
+  // --- SEND MESSAGE HANDLER ---
   async function sendMessage() {
     const text = inputEl.value;
     if (!text.trim()) return;
@@ -132,32 +141,27 @@
     addMessage("user", text);
     inputEl.value = "";
 
-    const payload = {
-      message: text,
-      chatId: CHAT_ID,
-      source: "shopify-widget",
-    };
-
-    console.log("[Albasha Chat] Sending to n8n:", SERVER_URL, payload);
-
     try {
-      // no custom headers → keep this a "simple" POST
+      // Build payload with optional chatId
+      const payload = { message: text };
+      if (CHAT_ID) payload.chatId = CHAT_ID;
+
       const res = await fetch(SERVER_URL, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      console.log("[Albasha Chat] Response status:", res.status);
-
       if (!res.ok) {
-        addMessage("ai", "Sorry, there was a problem talking to the assistant.");
+        console.error("n8n error status:", res.status);
+        addMessage("ai", "Sorry, I couldn't reach the server.");
         return;
       }
 
       const data = await res.json();
-      console.log("[Albasha Chat] Response JSON:", data);
 
-      if (data.chatId && data.chatId !== CHAT_ID) {
+      // If backend sends back a new chatId, store it
+      if (data.chatId && !CHAT_ID) {
         CHAT_ID = data.chatId;
         localStorage.setItem("albasha_chat_id", CHAT_ID);
       }
@@ -165,36 +169,22 @@
       const replyText = data.reply || "Sorry, I couldn't understand that.";
       addMessage("ai", replyText);
     } catch (err) {
-      console.error("[Albasha Chat] Fetch failed:", err);
+      console.error("Fetch error:", err);
       addMessage("ai", "Sorry, I couldn't reach the server.");
     }
   }
 
+  sendBtn.onclick = sendMessage;
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendMessage();
+  });
+
   // --- DISPLAY MESSAGES ---
   function addMessage(sender, text) {
-    const box = document.getElementById("albasha-chat-messages");
     const bubble = document.createElement("div");
-    bubble.style.margin = "8px 0";
-    bubble.style.padding = "10px 14px";
-    bubble.style.borderRadius = "10px";
-    bubble.style.maxWidth = "80%";
-    bubble.style.whiteSpace = "pre-wrap";
-    bubble.style.display = "inline-block";
-
-    if (sender === "user") {
-      bubble.style.background = "#eee";
-    } else {
-      bubble.style.background = PRIMARY;
-      bubble.style.color = "#fff";
-    }
-
-    const row = document.createElement("div");
-    row.style.display = "flex";
-    row.style.justifyContent = sender === "user" ? "flex-end" : "flex-start";
-    row.appendChild(bubble);
-
+    bubble.classList.add("albasha-bubble", sender === "user" ? "user" : "ai");
     bubble.innerText = text;
-    box.appendChild(row);
-    box.scrollTop = box.scrollHeight;
+    messagesEl.appendChild(bubble);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 })();
