@@ -1,6 +1,6 @@
 (() => {
   // --- CONFIG ---
-  const SERVER_URL = "https://n8n.srv1182142.hstgr.cloud/webhook/Albasha-Chat"; 
+  const SERVER_URL = "https://n8n.srv1182142.hstgr.cloud/webhook/Albasha-Chat";
   const PRIMARY = "#A4472E"; // Albasha Red
   const ICON = "💬";
 
@@ -132,26 +132,31 @@
     addMessage("user", text);
     inputEl.value = "";
 
+    const payload = {
+      message: text,
+      chatId: CHAT_ID,
+      source: "shopify-widget",
+    };
+
+    console.log("[Albasha Chat] Sending to n8n:", SERVER_URL, payload);
+
     try {
-      // IMPORTANT: no headers here → avoids CORS preflight
+      // no custom headers → keep this a "simple" POST
       const res = await fetch(SERVER_URL, {
         method: "POST",
-        body: JSON.stringify({
-          message: text,
-          chatId: CHAT_ID,
-          source: "shopify-widget",
-        }),
+        body: JSON.stringify(payload),
       });
 
+      console.log("[Albasha Chat] Response status:", res.status);
+
       if (!res.ok) {
-        console.error("n8n error status", res.status);
         addMessage("ai", "Sorry, there was a problem talking to the assistant.");
         return;
       }
 
       const data = await res.json();
+      console.log("[Albasha Chat] Response JSON:", data);
 
-      // if n8n ever returns chatId, we update ours
       if (data.chatId && data.chatId !== CHAT_ID) {
         CHAT_ID = data.chatId;
         localStorage.setItem("albasha_chat_id", CHAT_ID);
@@ -160,7 +165,7 @@
       const replyText = data.reply || "Sorry, I couldn't understand that.";
       addMessage("ai", replyText);
     } catch (err) {
-      console.error("Fetch error:", err);
+      console.error("[Albasha Chat] Fetch failed:", err);
       addMessage("ai", "Sorry, I couldn't reach the server.");
     }
   }
@@ -178,18 +183,17 @@
 
     if (sender === "user") {
       bubble.style.background = "#eee";
-      bubble.style.alignSelf = "flex-end";
     } else {
       bubble.style.background = PRIMARY;
       bubble.style.color = "#fff";
     }
 
-    bubble.innerText = text;
     const row = document.createElement("div");
     row.style.display = "flex";
     row.style.justifyContent = sender === "user" ? "flex-end" : "flex-start";
     row.appendChild(bubble);
 
+    bubble.innerText = text;
     box.appendChild(row);
     box.scrollTop = box.scrollHeight;
   }
