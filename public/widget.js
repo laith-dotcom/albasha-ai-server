@@ -1,61 +1,192 @@
-// api/chat.js
-// Proxy from the Albasha widget -> Vercel -> n8n webhook
+(() => {
+  // --- CONFIG ---
+  const SERVER_URL = "https://albasha-ai-server.vercel.app"; // Vercel app
+  const PRIMARY = "#A4472E"; // Albasha Red
+  const ICON = "💬";
 
-const N8N_WEBHOOK_URL =
-  "https://n8n.srv1182142.hstgr.cloud/webhook/Albasha-Chat";
-
-// Small helper to add CORS headers
-function setCors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "https://albasha.store");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-}
-
-export default async function handler(req, res) {
-  // Handle CORS preflight
-  if (req.method === "OPTIONS") {
-    setCors(res);
-    res.status(200).end();
-    return;
-  }
-
-  setCors(res);
-
-  if (req.method !== "POST") {
-    res.status(405).json({ error: "Method not allowed" });
-    return;
-  }
-
+  // --- CACHED CHAT ID (per browser) ---
+  let CHAT_ID = null;
   try {
-    const { message, chatId } = req.body || {};
+    CHAT_ID = localStorage.getItem("albasha_chat_id") || null;
+  } catch (e) {
+    CHAT_ID = null;
+  }
 
-    if (!message || typeof message !== "string") {
-      res.status(400).json({ error: "Missing message" });
-      return;
+  // --- STYLES ---
+  const style = document.createElement("style");
+  style.innerHTML = `
+    #albasha-chat-btn {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: ${PRIMARY};
+      color: white;
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 30px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      z-index: 999999;
     }
 
-    // Forward to n8n
-    const n8nResponse = await fetch(N8N_WEBHOOK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, chatId }),
-    });
+    #albasha-chat-window {
+      position: fixed;
+      bottom: 110px;
+      right: 24px;
+      width: 350px;
+      height: 500px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 999999;
+      border: 2px solid ${PRIMARY};
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
 
-    const data = await n8nResponse.json().catch(() => ({}));
+    #albasha-chat-header {
+      background: ${PRIMARY};
+      padding: 14px;
+      color: #fff;
+      font-weight: bold;
+      text-align: center;
+    }
 
-    // If n8n doesn’t send a reply field, give a fallback
-    const replyText =
-      data.reply || "Sorry, I couldn't understand that, try again.";
+    #albasha-chat-messages {
+      flex: 1;
+      padding: 12px;
+      overflow-y: auto;
+      font-size: 15px;
+      display: flex;
+      flex-direction: column;
+    }
 
-    res.status(n8nResponse.status).json({
-      ...data,
-      reply: replyText,
-    });
-  } catch (err) {
-    console.error("chat api error:", err);
-    res.status(500).json({
-      reply: "Sorry, there was an internal server error.",
-      error: String(err),
-    });
+    #albasha-chat-input {
+      display: flex;
+      border-top: 1px solid #ddd;
+    }
+
+    #albasha-chat-input input {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      outline: none;
+      font-size: 15px;
+    }
+
+    #albasha-chat-input button {
+      background: ${PRIMARY};
+      color: #fff;
+      border: none;
+      padding: 0 18px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+  `;
+  document.head.appendChild(style);
+
+  // --- BUTTON ---
+  const btn = document.createElement("div");
+  btn.id = "albasha-chat-btn";
+  btn.innerHTML = ICON;
+  document.body.appendChild(btn);
+
+  // --- CHAT WINDOW ---
+  const chat = document.createElement("div");
+  chat.id = "albasha-chat-window";
+  chat.innerHTML = `
+    <div id="albasha-chat-header">Albasha Assistant</div>
+    <div id="albasha-chat-messages"></div>
+    <div id="albasha-chat-input">
+      <input type="text" id="albasha-chat-text" placeholder="Type here...">
+      <button id="albasha-send">Send</button>
+    </div>
+  `;
+  document.body.appendChild(chat);
+
+  const inputEl = chat.querySelector("#albasha-chat-text");
+  const sendBtn = chat.querySelector("#albasha-send");
+  const messagesBox = chat.querySelector("#albasha-chat-messages");
+
+  // --- OPEN/CLOSE ---
+  btn.onclick = () => {
+    chat.style.display = chat.style.display === "flex" ? "none" : "flex";
+  };
+
+  // --- DISPLAY MESSAGE ---
+  function addMessage(sender, text) {
+    const bubble = document.createElement("div");
+    bubble.style.margin = "8px 0";
+    bubble.style.padding = "10px 14px";
+    bubble.style.borderRadius = "10px";
+    bubble.style.maxWidth = "80%";
+    bubble.style.whiteSpace = "pre-wrap";
+
+    if (sender === "user") {
+      bubble.style.background = "#eee";
+      bubble.style.alignSelf = "flex-end";
+    } else {
+      bubble.style.background = PRIMARY;
+      bubble.style.color = "#fff";
+      bubble.style.alignSelf = "flex-start";
+    }
+
+    bubble.innerText = text;
+    messagesBox.appendChild(bubble);
+    messagesBox.scrollTop = messagesBox.scrollHeight;
   }
-}
+
+  // --- SEND HANDLER ---
+  async function sendMessage() {
+    const text = inputEl.value;
+    if (!text || !text.trim()) return;
+
+    addMessage("user", text);
+    inputEl.value = "";
+
+    try {
+      const payload = { message: text };
+      if (CHAT_ID) payload.chatId = CHAT_ID;
+
+      const res = await fetch(`${SERVER_URL}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        console.error("chat api status:", res.status);
+        addMessage("ai", "Sorry, I couldn't reach the server.");
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+
+      if (data.chatId) {
+        CHAT_ID = data.chatId;
+        try {
+          localStorage.setItem("albasha_chat_id", CHAT_ID);
+        } catch (e) {}
+      }
+
+      const replyText =
+        data.reply || "Sorry, I couldn't understand that. Please try again.";
+      addMessage("ai", replyText);
+    } catch (err) {
+      console.error("chat api error:", err);
+      addMessage("ai", "Sorry, I couldn't reach the server.");
+    }
+  }
+
+  // --- EVENT LISTENERS ---
+  sendBtn.addEventListener("click", sendMessage);
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendMessage();
+  });
+})();
