@@ -1,8 +1,15 @@
 (() => {
   // --- CONFIG ---
-  const SERVER_URL = "https://n8n.srv1182142.hstgr.cloud/webhook/Albasha-Chat";
+  const SERVER_URL = "https://n8n.srv1182142.hstgr.cloud/webhook/Albasha-Chat"; 
   const PRIMARY = "#A4472E"; // Albasha Red
   const ICON = "💬";
+
+  // --- SIMPLE CHAT SESSION ID (per browser) ---
+  let CHAT_ID = localStorage.getItem("albasha_chat_id") || null;
+  if (!CHAT_ID) {
+    CHAT_ID = "albasha-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+    localStorage.setItem("albasha_chat_id", CHAT_ID);
+  }
 
   // --- STYLES ---
   const style = document.createElement("style");
@@ -39,13 +46,14 @@
       overflow: hidden;
       z-index: 999999;
       border: 2px solid ${PRIMARY};
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     #albasha-chat-header {
       background: ${PRIMARY};
       padding: 14px;
       color: #fff;
-      font-weight: bold;
+      font-weight: 600;
       text-align: center;
     }
 
@@ -53,7 +61,6 @@
       flex: 1;
       padding: 12px;
       overflow-y: auto;
-      font-family: sans-serif;
       font-size: 15px;
     }
 
@@ -76,6 +83,7 @@
       border: none;
       padding: 0 18px;
       cursor: pointer;
+      font-weight: 500;
     }
   `;
   document.head.appendChild(style);
@@ -93,21 +101,30 @@
     <div id="albasha-chat-header">Albasha Assistant</div>
     <div id="albasha-chat-messages"></div>
     <div id="albasha-chat-input">
-      <input type="text" id="albasha-chat-text" placeholder="Type here...">
+      <input type="text" id="albasha-chat-text" placeholder="Type here..." />
       <button id="albasha-send">Send</button>
     </div>
   `;
   document.body.appendChild(chat);
+
+  const inputEl = document.getElementById("albasha-chat-text");
 
   // --- OPEN/CLOSE ---
   btn.onclick = () => {
     chat.style.display = chat.style.display === "flex" ? "none" : "flex";
   };
 
-  // --- SEND MESSAGE ---
-  const inputEl = document.getElementById("albasha-chat-text");
-  const sendBtn = document.getElementById("albasha-send");
+  // send on Enter
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
 
+  document.getElementById("albasha-send").onclick = sendMessage;
+
+  // --- SEND MESSAGE ---
   async function sendMessage() {
     const text = inputEl.value;
     if (!text.trim()) return;
@@ -115,34 +132,38 @@
     addMessage("user", text);
     inputEl.value = "";
 
-    let res;
     try {
-      res = await fetch(SERVER_URL, {
+      // IMPORTANT: no headers here → avoids CORS preflight
+      const res = await fetch(SERVER_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({
+          message: text,
+          chatId: CHAT_ID,
+          source: "shopify-widget",
+        }),
       });
+
+      if (!res.ok) {
+        console.error("n8n error status", res.status);
+        addMessage("ai", "Sorry, there was a problem talking to the assistant.");
+        return;
+      }
+
+      const data = await res.json();
+
+      // if n8n ever returns chatId, we update ours
+      if (data.chatId && data.chatId !== CHAT_ID) {
+        CHAT_ID = data.chatId;
+        localStorage.setItem("albasha_chat_id", CHAT_ID);
+      }
+
+      const replyText = data.reply || "Sorry, I couldn't understand that.";
+      addMessage("ai", replyText);
     } catch (err) {
-      console.error("Network error calling n8n:", err);
+      console.error("Fetch error:", err);
       addMessage("ai", "Sorry, I couldn't reach the server.");
-      return;
     }
-
-    if (!res.ok) {
-      console.error("n8n error status:", res.status);
-      addMessage("ai", "Sorry, I couldn't reach the server.");
-      return;
-    }
-
-    const data = await res.json();
-    const replyText = data.reply || "Sorry, I couldn't understand that.";
-    addMessage("ai", replyText);
   }
-
-  sendBtn.onclick = sendMessage;
-  inputEl.addEventListener("keydown", e => {
-    if (e.key === "Enter") sendMessage();
-  });
 
   // --- DISPLAY MESSAGES ---
   function addMessage(sender, text) {
@@ -153,6 +174,7 @@
     bubble.style.borderRadius = "10px";
     bubble.style.maxWidth = "80%";
     bubble.style.whiteSpace = "pre-wrap";
+    bubble.style.display = "inline-block";
 
     if (sender === "user") {
       bubble.style.background = "#eee";
@@ -163,7 +185,12 @@
     }
 
     bubble.innerText = text;
-    box.appendChild(bubble);
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.justifyContent = sender === "user" ? "flex-end" : "flex-start";
+    row.appendChild(bubble);
+
+    box.appendChild(row);
     box.scrollTop = box.scrollHeight;
   }
 })();
