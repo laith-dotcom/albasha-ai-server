@@ -1,6 +1,6 @@
 (() => {
   // --- CONFIG ---
-  const SERVER_URL = "https://n8n.srv1182142.hstgr.cloud/webhook-test/Albasha-Chat";
+  const SERVER_URL = "https://n8n.srv1182142.hstgr.cloud/webhook/Albasha-Chat";
   const PRIMARY = "#A4472E"; // Albasha Red
   const ICON = "💬"; // Replace later with your vector icon
 
@@ -134,11 +134,14 @@
     inputEl.value = "";
 
     try {
-     const reply = await fetch(SERVER_URL, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ message: text }),
-});
+      const res = await fetch(SERVER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          chatId: CHAT_ID, // existing chat id (or null on first message)
+        }),
+      });
 
       if (!res.ok) {
         console.error("n8n error status:", res.status);
