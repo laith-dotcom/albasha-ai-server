@@ -1,47 +1,38 @@
-import fetch from "node-fetch";
+// Simple proxy: Albasha widget -> Vercel -> n8n webhook
 
 export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
   try {
-    const { message } = JSON.parse(req.body);
+    const { message, chatId } = req.body || {};
 
-    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4.1-mini",
-        messages: [
-          {
-            role: "system",
-            content: `
-You are the official Albasha AI Assistant.
-You speak Arabic and English.
-You help customers find products, answer questions, increase sales, 
-and guide them through meat shipping, international orders, and store policies.
+    if (!message || typeof message !== "string") {
+      res.status(400).json({ error: "Missing message" });
+      return;
+    }
 
-Rules:
-- Free shipping on orders over $200, EXCEPT meat.
-- Meat requires express shipping.
-- International orders: customer must email contact@albasha.store.
-- Store location: 11321 Village Square Ln, Fishers, IN 46038.
-- Phone: 317-578-0040.
-- Speak naturally, friendly, helpful, professional.
-`
-          },
-          { role: "user", content: message }
-        ]
-      })
+    // Forward to n8n
+    const n8nResponse = await fetch(
+      "https://n8n.srv1182142.hstgr.cloud/webhook/Albasha-Chat",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, chatId }),
+      }
+    );
+
+    const data = await n8nResponse.json().catch(() => ({}));
+
+    // Pass through status + JSON
+    res.status(n8nResponse.status).json(data);
+  } catch (err) {
+    console.error("chat api error:", err);
+    res.status(500).json({
+      reply: "Sorry, there was an internal server error.",
+      error: String(err),
     });
-
-    const data = await openaiRes.json();
-    const reply = data.choices?.[0]?.message?.content || "Error, please try again.";
-
-    res.status(200).json({ reply });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ reply: "Server error." });
   }
 }
