@@ -1,6 +1,6 @@
 (() => {
   // --- CONFIG ---
-  const SERVER_URL = "https://YOUR-VERCEL-APP.vercel.app"; 
+  const SERVER_URL = "https://albasha-ai-server.vercel.app"; 
   const PRIMARY = "#A4472E"; // Albasha Red
   const ICON = "💬"; // Replace later with your vector icon
 
