@@ -134,14 +134,11 @@
     inputEl.value = "";
 
     try {
-      const res = await fetch(SERVER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          chatId: CHAT_ID, // existing chat id (or null on first message)
-        }),
-      });
+     const reply = await fetch(SERVER_URL, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ message: text }),
+});
 
       if (!res.ok) {
         console.error("n8n error status:", res.status);
