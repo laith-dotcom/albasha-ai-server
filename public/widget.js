@@ -142,47 +142,60 @@
     messagesBox.scrollTop = messagesBox.scrollHeight;
   }
 
-  // --- SEND HANDLER ---
-  async function sendMessage() {
-    const text = inputEl.value;
-    if (!text || !text.trim()) return;
+ // --- SEND MESSAGE ---
+async function sendMessage() {
+  const inputEl = document.getElementById("albasha-chat-text");
+  const text = inputEl.value;
+  if (!text || !text.trim()) return;
 
-    addMessage("user", text);
-    inputEl.value = "";
+  addMessage("user", text);
+  inputEl.value = "";
 
-    try {
-      const payload = { message: text };
-      if (CHAT_ID) payload.chatId = CHAT_ID;
+  try {
+    const payload = {
+      message: text,
+      chatId: CHAT_ID || null,
+    };
 
-      const res = await fetch(`${SERVER_URL}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+    const res = await fetch(SERVER_URL, {
+      method: "POST",
+      // text/plain avoids a CORS preflight
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify(payload),
+    });
 
-      if (!res.ok) {
-        console.error("chat api status:", res.status);
-        addMessage("ai", "Sorry, I couldn't reach the server.");
-        return;
-      }
-
-      const data = await res.json().catch(() => ({}));
-
-      if (data.chatId) {
-        CHAT_ID = data.chatId;
-        try {
-          localStorage.setItem("albasha_chat_id", CHAT_ID);
-        } catch (e) {}
-      }
-
-      const replyText =
-        data.reply || "Sorry, I couldn't understand that. Please try again.";
-      addMessage("ai", replyText);
-    } catch (err) {
-      console.error("chat api error:", err);
+    if (!res.ok) {
+      console.error("n8n error status:", res.status);
       addMessage("ai", "Sorry, I couldn't reach the server.");
+      return;
     }
+
+    const data = await res.json().catch(() => ({}));
+
+    // store chat id if n8n sends it back
+    if (data.chatId) {
+      CHAT_ID = data.chatId;
+      try {
+        localStorage.setItem("albasha_chat_id", CHAT_ID);
+      } catch (e) {}
+    }
+
+    const replyText =
+      data.reply || "Sorry, I couldn't understand that. Please try again.";
+    addMessage("ai", replyText);
+  } catch (err) {
+    console.error("Fetch error:", err);
+    addMessage("ai", "Sorry, I couldn't reach the server.");
   }
+}
+
+// hook up button + enter key
+document.getElementById("albasha-send").onclick = sendMessage;
+document
+  .getElementById("albasha-chat-text")
+  .addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendMessage();
+  });
 
   // --- EVENT LISTENERS ---
   sendBtn.addEventListener("click", sendMessage);
