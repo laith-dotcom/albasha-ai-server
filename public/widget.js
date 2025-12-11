@@ -1,6 +1,6 @@
 (() => {
   // --- CONFIG ---
-  const SERVER_URL = "https://albasha-ai-server.vercel.app"; // Vercel app
+  const SERVER_URL = "https://n8n.srv1182142.hstgr.cloud/webhook/Albasha-Chat"; // Vercel app
   const PRIMARY = "#A4472E"; // Albasha Red
   const ICON = "💬";
 
