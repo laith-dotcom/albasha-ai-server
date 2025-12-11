@@ -4,8 +4,13 @@
   const PRIMARY = "#A4472E"; // Albasha Red
   const ICON = "💬"; // Replace later with your vector icon
 
-  // Persistent chat ID per browser
-  let CHAT_ID = localStorage.getItem("albasha_chat_id") || null;
+  // Persist a chat ID per browser session
+  let CHAT_ID = null;
+  try {
+    CHAT_ID = window.localStorage.getItem("albasha_chat_id") || null;
+  } catch (e) {
+    CHAT_ID = null;
+  }
 
   // --- STYLES ---
   const style = document.createElement("style");
@@ -42,24 +47,26 @@
       overflow: hidden;
       z-index: 999999;
       border: 2px solid ${PRIMARY};
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     #albasha-chat-header {
       background: ${PRIMARY};
       padding: 14px;
       color: #fff;
-      font-weight: bold;
+      font-weight: 600;
       text-align: center;
+      font-size: 16px;
     }
 
     #albasha-chat-messages {
       flex: 1;
       padding: 12px;
       overflow-y: auto;
-      font-family: sans-serif;
       font-size: 15px;
       display: flex;
       flex-direction: column;
+      gap: 6px;
     }
 
     #albasha-chat-input {
@@ -81,6 +88,8 @@
       border: none;
       padding: 0 18px;
       cursor: pointer;
+      font-size: 15px;
+      font-weight: 500;
     }
   `;
   document.head.appendChild(style);
@@ -106,24 +115,19 @@
 
   const inputEl = document.getElementById("albasha-chat-text");
   const sendBtn = document.getElementById("albasha-send");
-  const messagesBox = document.getElementById("albasha-chat-messages");
+  const messagesEl = document.getElementById("albasha-chat-messages");
 
   // --- OPEN/CLOSE ---
   btn.onclick = () => {
     chat.style.display = chat.style.display === "flex" ? "none" : "flex";
   };
 
-  // Allow Enter key to send
+  // Enter to send
   inputEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      sendMessage();
-    }
+    if (e.key === "Enter") sendMessage();
   });
-
-  sendBtn.onclick = () => {
-    sendMessage();
-  };
+  // Button to send
+  sendBtn.onclick = sendMessage;
 
   // --- SEND MESSAGE ---
   async function sendMessage() {
@@ -133,14 +137,18 @@
     addMessage("user", text);
     inputEl.value = "";
 
-   const reply = await fetch(SERVER_URL, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ message: text }),
-});
+    const payload = { message: text };
+    if (CHAT_ID) payload.chatId = CHAT_ID;
+
+    try {
+      const res = await fetch(SERVER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) {
-        console.error("n8n error status:", res.status);
+        console.error("n8n error status", res.status);
         addMessage("ai", "Sorry, there was a problem talking to the assistant.");
         return;
       }
@@ -150,13 +158,17 @@
       // If n8n sends back a chatId, store it for future messages
       if (data.chatId && !CHAT_ID) {
         CHAT_ID = data.chatId;
-        localStorage.setItem("albasha_chat_id", CHAT_ID);
+        try {
+          window.localStorage.setItem("albasha_chat_id", CHAT_ID);
+        } catch (e) {
+          // ignore if localStorage is blocked
+        }
       }
 
       const replyText = data.reply || "Sorry, I couldn't understand that.";
       addMessage("ai", replyText);
     } catch (err) {
-      console.error("Fetch error:", err);
+      console.error("Fetch error", err);
       addMessage("ai", "Sorry, I couldn't reach the server.");
     }
   }
@@ -164,23 +176,23 @@
   // --- DISPLAY MESSAGES ---
   function addMessage(sender, text) {
     const bubble = document.createElement("div");
-    bubble.style.margin = "8px 0";
     bubble.style.padding = "10px 14px";
     bubble.style.borderRadius = "10px";
     bubble.style.maxWidth = "80%";
     bubble.style.whiteSpace = "pre-wrap";
 
     if (sender === "user") {
-      bubble.style.background = "#eee";
       bubble.style.alignSelf = "flex-end";
+      bubble.style.background = "#eee";
+      bubble.style.color = "#222";
     } else {
+      bubble.style.alignSelf = "flex-start";
       bubble.style.background = PRIMARY;
       bubble.style.color = "#fff";
-      bubble.style.alignSelf = "flex-start";
     }
 
     bubble.innerText = text;
-    messagesBox.appendChild(bubble);
-    messagesBox.scrollTop = messagesBox.scrollHeight;
+    messagesEl.appendChild(bubble);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 })();
