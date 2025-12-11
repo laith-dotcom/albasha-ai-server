@@ -1,8 +1,11 @@
 (() => {
   // --- CONFIG ---
- const SERVER_URL = "https://n8n.srv1182142.hstgr.cloud/webhook/Albasha-Chat"; 
+  const SERVER_URL = "https://n8n.srv1182142.hstgr.cloud/webhook/Albasha-Chat";
   const PRIMARY = "#A4472E"; // Albasha Red
   const ICON = "💬"; // Replace later with your vector icon
+
+  // Persistent chat ID per browser
+  let CHAT_ID = localStorage.getItem("albasha_chat_id") || null;
 
   // --- STYLES ---
   const style = document.createElement("style");
@@ -55,6 +58,8 @@
       overflow-y: auto;
       font-family: sans-serif;
       font-size: 15px;
+      display: flex;
+      flex-direction: column;
     }
 
     #albasha-chat-input {
@@ -99,32 +104,69 @@
   `;
   document.body.appendChild(chat);
 
+  const inputEl = document.getElementById("albasha-chat-text");
+  const sendBtn = document.getElementById("albasha-send");
+  const messagesBox = document.getElementById("albasha-chat-messages");
+
   // --- OPEN/CLOSE ---
   btn.onclick = () => {
     chat.style.display = chat.style.display === "flex" ? "none" : "flex";
   };
 
+  // Allow Enter key to send
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  sendBtn.onclick = () => {
+    sendMessage();
+  };
+
   // --- SEND MESSAGE ---
-  document.getElementById("albasha-send").onclick = async () => {
-    const text = document.getElementById("albasha-chat-text").value;
+  async function sendMessage() {
+    const text = inputEl.value;
     if (!text.trim()) return;
 
     addMessage("user", text);
-    document.getElementById("albasha-chat-text").value = "";
+    inputEl.value = "";
 
-    const reply = await fetch(`${SERVER_URL}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text }),
-    });
+    try {
+      const res = await fetch(SERVER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          chatId: CHAT_ID, // existing chat id (or null on first message)
+        }),
+      });
 
-    const data = await reply.json();
-    addMessage("ai", data.reply);
-  };
+      if (!res.ok) {
+        console.error("n8n error status:", res.status);
+        addMessage("ai", "Sorry, there was a problem talking to the assistant.");
+        return;
+      }
+
+      const data = await res.json();
+
+      // If n8n sends back a chatId, store it for future messages
+      if (data.chatId && !CHAT_ID) {
+        CHAT_ID = data.chatId;
+        localStorage.setItem("albasha_chat_id", CHAT_ID);
+      }
+
+      const replyText = data.reply || "Sorry, I couldn't understand that.";
+      addMessage("ai", replyText);
+    } catch (err) {
+      console.error("Fetch error:", err);
+      addMessage("ai", "Sorry, I couldn't reach the server.");
+    }
+  }
 
   // --- DISPLAY MESSAGES ---
   function addMessage(sender, text) {
-    const box = document.getElementById("albasha-chat-messages");
     const bubble = document.createElement("div");
     bubble.style.margin = "8px 0";
     bubble.style.padding = "10px 14px";
@@ -138,10 +180,11 @@
     } else {
       bubble.style.background = PRIMARY;
       bubble.style.color = "#fff";
+      bubble.style.alignSelf = "flex-start";
     }
 
     bubble.innerText = text;
-    box.appendChild(bubble);
-    box.scrollTop = box.scrollHeight;
+    messagesBox.appendChild(bubble);
+    messagesBox.scrollTop = messagesBox.scrollHeight;
   }
 })();
