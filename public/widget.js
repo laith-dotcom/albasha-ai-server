@@ -1,6 +1,6 @@
 (() => {
   // --- CONFIG ---
-  const SERVER_URL = "https://n8n.srv1182142.hstgr.cloud/webhook-test/Albasha-Chat ";
+  const SERVER_URL = "https://n8n.srv1182142.hstgr.cloud/webhook-test/Albasha-Chat";
   const PRIMARY = "#A4472E"; // Albasha Red
   const ICON = "💬"; // Replace later with your vector icon
 
