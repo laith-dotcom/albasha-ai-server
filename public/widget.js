@@ -1,6 +1,6 @@
 (() => {
   // --- CONFIG ---
-  const SERVER_URL = "https://n8n.srv1182142.hstgr.cloud/webhook/Albasha-Chat";
+  const SERVER_URL = "https://albasha-ai-server.vercel.app"; // your Vercel app
   const PRIMARY = "#A4472E"; // Albasha Red
   const ICON = "💬"; // Replace later with your vector icon
 
@@ -141,21 +141,21 @@
     if (CHAT_ID) payload.chatId = CHAT_ID;
 
     try {
-      const res = await fetch(SERVER_URL, {
+      const res = await fetch(`${SERVER_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        console.error("n8n error status", res.status);
+        console.error("Backend error status", res.status);
         addMessage("ai", "Sorry, there was a problem talking to the assistant.");
         return;
       }
 
       const data = await res.json();
 
-      // If n8n sends back a chatId, store it for future messages
+      // If backend sends back a chatId, store it
       if (data.chatId && !CHAT_ID) {
         CHAT_ID = data.chatId;
         try {
