@@ -16,7 +16,7 @@ export default async function handler(req, res) {
 
     // Forward to n8n
     const n8nResponse = await fetch(
-      "https://n8n.srv1182142.hstgr.cloud/webhook/Albasha-Chat",
+      "https://n8n.srv1182142.hstgr.cloud/webhook-test/Albasha-Chat",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
