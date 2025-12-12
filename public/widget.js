@@ -159,14 +159,36 @@
       }
 
       const data = await res.json();
+      console.log("Albasha widget response:", data);
 
-      // If backend sends back a new chatId, store it
-      if (data.chatId && !CHAT_ID) {
-        CHAT_ID = data.chatId;
+      // Try to read chatId from various shapes
+      const newChatId =
+        (Array.isArray(data) && data[0]?.chatId) ||
+        data.chatId ||
+        (data.data && data.data.chatId);
+
+      if (newChatId && !CHAT_ID) {
+        CHAT_ID = newChatId;
         localStorage.setItem("albasha_chat_id", CHAT_ID);
       }
 
-      const replyText = data.reply || "Sorry, I couldn't understand that.";
+      // Try to extract the reply from the most common shapes
+      let replyText = "Sorry, I couldn't understand that.";
+
+      if (Array.isArray(data)) {
+        replyText =
+          data[0]?.output ||
+          data[0]?.reply ||
+          data[0]?.message ||
+          replyText;
+      } else if (data && typeof data === "object") {
+        replyText =
+          data.reply ||
+          data.output ||
+          (data.data && (data.data.reply || data.data.output)) ||
+          replyText;
+      }
+
       addMessage("ai", replyText);
     } catch (err) {
       console.error("Fetch error:", err);
