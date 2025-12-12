@@ -102,6 +102,14 @@
       padding: 0 18px;
       cursor: pointer;
     }
+
+    .albasha-typing {
+      font-size: 12px;
+      color: #666;
+      margin: 4px 2px;
+      align-self: flex-start;
+      font-style: italic;
+    }
   `;
   document.head.appendChild(style);
 
@@ -130,7 +138,16 @@
 
   // --- OPEN/CLOSE ---
   btn.onclick = () => {
-    chat.style.display = chat.style.display === "flex" ? "none" : "flex";
+    const isOpen = chat.style.display === "flex";
+    chat.style.display = isOpen ? "none" : "flex";
+
+    // First time open: small greeting
+    if (!isOpen && messagesEl.childElementCount === 0) {
+      addMessage(
+        "ai",
+        "Salam! I’m Albasha Assistant. Ask me about any product, price, ingredient, or availability in our store. 😊"
+      );
+    }
   };
 
   // --- SEND MESSAGE HANDLER ---
@@ -140,6 +157,13 @@
 
     addMessage("user", text);
     inputEl.value = "";
+
+    // Show typing indicator
+    const typingEl = document.createElement("div");
+    typingEl.className = "albasha-typing";
+    typingEl.innerText = "Assistant is typing...";
+    messagesEl.appendChild(typingEl);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
 
     try {
       // Build payload with optional chatId
@@ -154,6 +178,7 @@
 
       if (!res.ok) {
         console.error("n8n error status:", res.status);
+        messagesEl.removeChild(typingEl);
         addMessage("ai", "Sorry, I couldn't reach the server.");
         return;
       }
@@ -161,37 +186,25 @@
       const data = await res.json();
       console.log("Albasha widget response:", data);
 
-      // Try to read chatId from various shapes
-      const newChatId =
-        (Array.isArray(data) && data[0]?.chatId) ||
-        data.chatId ||
-        (data.data && data.data.chatId);
-
-      if (newChatId && !CHAT_ID) {
-        CHAT_ID = newChatId;
+      // If backend sends back a new chatId, store it
+      if (data.chatId && !CHAT_ID) {
+        CHAT_ID = data.chatId;
         localStorage.setItem("albasha_chat_id", CHAT_ID);
       }
 
-      // Try to extract the reply from the most common shapes
-      let replyText = "Sorry, I couldn't understand that.";
+      // *** IMPORTANT: support both { reply } and { output } formats ***
+      const replyText =
+        data.reply ||
+        data.output ||      // AI Agent output field
+        data.result ||
+        data.message ||
+        "Sorry, I couldn't understand that.";
 
-      if (Array.isArray(data)) {
-        replyText =
-          data[0]?.output ||
-          data[0]?.reply ||
-          data[0]?.message ||
-          replyText;
-      } else if (data && typeof data === "object") {
-        replyText =
-          data.reply ||
-          data.output ||
-          (data.data && (data.data.reply || data.data.output)) ||
-          replyText;
-      }
-
+      messagesEl.removeChild(typingEl);
       addMessage("ai", replyText);
     } catch (err) {
       console.error("Fetch error:", err);
+      if (typingEl.parentNode) messagesEl.removeChild(typingEl);
       addMessage("ai", "Sorry, I couldn't reach the server.");
     }
   }
